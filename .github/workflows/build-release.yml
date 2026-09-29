@@ -203,7 +203,15 @@ jobs:
       run: |
         if [ "$RUNNER_OS" == "Windows" ]; then SEP=";"; else SEP=":"; fi
         cd SpotiFLAC
-        pyinstaller --onefile --name "${{ matrix.build_name }}" --add-data "frontend${SEP}SpotiFLAC/frontend" --console ../launcher.py
+        pyinstaller --onefile --name "${{ matrix.build_name }}" \
+          --collect-all SpotiFLAC \
+          --add-data "frontend${SEP}SpotiFLAC/frontend" \
+          --add-data "extensions${SEP}SpotiFLAC/extensions" \
+          --add-data "tui${SEP}SpotiFLAC/tui" \
+          --hidden-import SpotiFLAC.core.signed_session_desktop \
+          --hidden-import SpotiFLAC.core.signed_session_mobile \
+          --hidden-import SpotiFLAC.core.signed_session_mono \
+          --console ../launcher.py
 
     - name: Setup QEMU for ARM64
       if: matrix.arch == 'arm64'
@@ -223,7 +231,15 @@ jobs:
             pip install pyinstaller certifi requests mutagen && \
             pip install . && \
             cd SpotiFLAC && \
-            pyinstaller --onefile --name '${{ matrix.build_name }}' --add-data 'frontend:SpotiFLAC/frontend' --console ../launcher.py
+            pyinstaller --onefile --name '${{ matrix.build_name }}' \
+              --collect-all SpotiFLAC \
+              --add-data 'frontend:SpotiFLAC/frontend' \
+              --add-data 'extensions:SpotiFLAC/extensions' \
+              --add-data 'tui:SpotiFLAC/tui' \
+              --hidden-import SpotiFLAC.core.signed_session_desktop \
+              --hidden-import SpotiFLAC.core.signed_session_mobile \
+              --hidden-import SpotiFLAC.core.signed_session_mono \
+              --console ../launcher.py
           "
 
     - name: Upload build artifact
