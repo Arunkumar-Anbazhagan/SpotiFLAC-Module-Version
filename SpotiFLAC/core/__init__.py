@@ -167,6 +167,13 @@ def get_acoustid_config() -> dict:
 
 
 def get_community_url(provider: str) -> str:
+    # A Community API can be rate-limited independently from the extension
+    # that also owns public mirrors. Return no URL during its cooldown so
+    # callers skip only Community and keep the rest of the provider usable.
+    from . import provider_cooldown
+
+    if provider_cooldown.community_remaining(provider) > 0:
+        return ""
     return _get_registry().get("community", {}).get(provider, "")
 
 

@@ -7,7 +7,10 @@ from collections.abc import Awaitable, Callable
 from SpotiFLAC.application.event_bus import EventBus
 from SpotiFLAC.application.legacy_download_adapter import LegacyDownloadAdapter
 from SpotiFLAC.application.metadata_service import MetadataService
-from SpotiFLAC.application.provider_executor import ProviderExecutor
+from SpotiFLAC.application.provider_executor import (
+    ProviderExecutor,
+    ProviderResultError,
+)
 from SpotiFLAC.application.provider_resolver import ProviderResolver
 from SpotiFLAC.application.pipeline import (
     DownloadContext,
@@ -259,6 +262,11 @@ class DownloadService:
                 if not ProviderExecutor.is_retryable(last_error, policy):
                     break
             if last_error is not None:
+                result_error = (
+                    last_error.result
+                    if isinstance(last_error, ProviderResultError)
+                    else None
+                )
                 await self._event_bus.publish(
                     "provider.failed",
                     {
@@ -278,8 +286,16 @@ class DownloadService:
                 failed.append(
                     DownloadFailure(
                         source=source,
-                        reason="download_failed",
-                        provider=provider,
+                        reason=(
+                            result_error.error
+                            if result_error is not None and result_error.error
+                            else "download_failed"
+                        ),
+                        provider=(
+                            result_error.provider
+                            if result_error is not None and result_error.provider
+                            else provider
+                        ),
                         attempts=policy.attempts,
                         retryable=ProviderExecutor.is_retryable(last_error, policy),
                     )
@@ -302,6 +318,8 @@ class DownloadService:
             if context.result.skipped:
                 skipped.append(
                     DownloadSkip(
+                        source=source,
+                        file_path=context.result.file_path,
                         track=context.metadata,
                         reason=context.result.error or "already_exists",
                         provider=provider,

@@ -8,6 +8,24 @@ from SpotiFLAC.core.models import DownloadResult
 from SpotiFLAC.core.retry import RetryPolicy
 
 
+class ProviderResultError(Exception):
+    """A provider completed normally but returned a failed result.
+
+    Providers use ``DownloadResult`` for expected failures instead of raising.
+    The application retry boundary still needs to see those failures so it can
+    try the next provider without mistaking the result for a success.
+    """
+
+    def __init__(self, result: DownloadResult) -> None:
+        self.result = result
+        super().__init__(result.error or "provider returned a failed result")
+
+    def is_retryable(self) -> bool:
+        # A failed provider result is eligible for the next provider candidate;
+        # provider-specific retry policy is handled inside the provider.
+        return True
+
+
 class ProviderExecutor:
     """Application-layer adapter for provider execution.
 
@@ -54,6 +72,8 @@ class ProviderExecutor:
                 else:
                     await operation
                 await wait_until_resumed(resume_event)
+                if self._last_result is not None and not self._last_result.success:
+                    return ProviderResultError(self._last_result)
                 return None
             except Exception as exc:
                 if not self.is_retryable(exc, policy):

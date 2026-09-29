@@ -1514,7 +1514,11 @@ async def _solve_impl(
             msg,
         )
 
-    if token is None:
+    # A network-captured grant is already the result needed by the signed
+    # session flow. The challenge page may not expose a Turnstile token to
+    # Python at all, even though it has completed /verify and returned a
+    # usable grant. Do not discard that grant by raising for the absent token.
+    if token is None and not (capture_callback and callback_grant):
         raise TimeoutError("Turnstile token not obtained")
     return (token, callback_grant) if capture_callback else token
 

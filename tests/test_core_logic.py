@@ -58,6 +58,7 @@ def test_quality_helpers_normalize_and_fallbacks():
     assert quality_for_provider("qobuz", "HI_RES") == "7"
     assert quality_for_provider("tidal", "LOSSLESS") == "LOSSLESS"
     assert quality_for_provider("pandora_native", "LOSSLESS") == "mp3_192"
+    assert quality_for_provider("gdstudio-py", "LOSSLESS") == "FLAC"
     # Dolby Atmos is Tidal-exclusive: Tidal gets it as-is, everyone else is
     # treated as HI_RES_LOSSLESS instead (never a token they can't use).
     assert map_amazon_community_quality("DOLBY_ATMOS") == "24"
@@ -333,16 +334,17 @@ def test_link_resolver_normalizes_and_extracts_links():
         "https://www.deezer.com/track/123456"
     )
 
-    songlink_payload = {
-        "linksByPlatform": {
-            "deezer": {"url": "https://www.deezer.com/track/123456"},
-            "amazonMusic": {
+    resolve_payload = {
+        "success": True,
+        "songUrls": {
+            "Deezer": "https://www.deezer.com/track/123456",
+            "AmazonMusic": {
                 "url": "https://music.amazon.com/albums/XXXXXXXXXX?trackAsin=B07T2G5CB2"
             },
-            "tidal": {"url": "https://listen.tidal.com/track/987654"},
-        }
+            "Tidal": "https://listen.tidal.com/track/987654",
+        },
     }
-    normalized = resolver._process_songlink_response(songlink_payload)
+    normalized = resolver._process_resolve_response(resolve_payload)
     assert normalized["deezer"] == "https://www.deezer.com/track/123456"
     assert (
         normalized["amazonMusic"]

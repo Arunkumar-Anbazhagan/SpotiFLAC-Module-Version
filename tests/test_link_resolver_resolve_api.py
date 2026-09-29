@@ -1,16 +1,8 @@
-"""Cross-platform links have to come from something that answers.
+"""Cross-platform link resolution through the active resolver API.
 
-Odesli retired free public access to Songlink's v1-alpha.1 API, and every
-request now returns 401 PUBLIC_API_ACCESS_DEPRECATED — measured directly,
-with and without our own headers, for both the `url` and `isrc` forms. The
-resolver kept asking it and kept getting nothing, silently: callers just saw
-an empty link map.
-
-The mobile app already routes Spotify URLs through a resolve endpoint on the
-project's own infrastructure and uses Songlink only as a fallback. These
-tests pin that order down, and pin down the response shapes the endpoint
-actually returns — its values are sometimes a bare URL string and sometimes
-an object wrapping one.
+The resolver is intentionally tested without a live service here. The real
+endpoint is exercised separately during manual diagnostics; these tests pin
+response normalization, fallback ordering, and malformed-response handling.
 """
 
 from __future__ import annotations
@@ -33,57 +25,72 @@ RESOLVED = {
 }
 
 
-def _resolver(monkeypatch, *, resolve=None, songlink=None) -> LinkResolver:
+def _resolver(monkeypatch, *, resolve=None) -> LinkResolver:
     resolver = LinkResolver()
-    calls: list[str] = []
+    calls: list[dict] = []
 
     async def fake_resolve(payload):
-        calls.append("resolve")
+        calls.append(payload)
         return resolve or {}
 
-    async def fake_songlink(params):
-        calls.append("songlink")
-        return songlink or {}
-
     monkeypatch.setattr(resolver, "_resolve_links_async", fake_resolve)
-    monkeypatch.setattr(resolver, "_get_songlink_links_async", fake_songlink)
     cast(Any, resolver).calls = calls
     return resolver
 
 
-def test_the_resolve_api_is_asked_first(monkeypatch) -> None:
-    resolver = _resolver(monkeypatch, resolve={"spotify": "https://x"})
-    links = asyncio.run(resolver._get_songlink_links_by_url_async("https://y"))
-    assert links == {"spotify": "https://x"}
+def test_the_resolve_api_is_used_for_a_source_url(monkeypatch) -> None:
+    resolver = _resolver(monkeypatch, resolve={"spotify": "https://spotify"})
+    links = asyncio.run(resolver._get_resolve_links_by_url_async("https://source"))
+    assert links == {"spotify": "https://spotify"}
+    assert cast(Any, resolver).calls == [{"url": "https://source"}]
+
+
+def test_the_resolve_api_is_used_for_a_platform_id(monkeypatch) -> None:
+    resolver = _resolver(monkeypatch, resolve={"tidal": "https://tidal"})
+    links = asyncio.run(resolver._get_resolve_links_by_id_async("abc", "spotify"))
+    assert links == {"tidal": "https://tidal"}
     assert cast(Any, resolver).calls == [
-        "resolve"
-    ], "Songlink must not be asked needlessly"
+        {"platform": "spotify", "type": "track", "id": "abc"}
+    ]
 
 
-def test_songlink_is_still_tried_when_resolve_returns_nothing(monkeypatch) -> None:
-    """Kept rather than deleted: the day Odesli access returns, finding out
-    costs one request.
-    """
-    resolver = _resolver(monkeypatch, resolve={}, songlink={"deezer": "https://d"})
-    links = asyncio.run(resolver._get_songlink_links_by_url_async("https://y"))
-    assert links == {"deezer": "https://d"}
-    assert cast(Any, resolver).calls == ["resolve", "songlink"]
+def test_an_isrc_does_not_replace_the_source_id_lookup(monkeypatch) -> None:
+    """The source edition is authoritative; ISRC lookups only fill gaps."""
+    resolver = LinkResolver()
+    calls: list[tuple[str, str]] = []
 
+    async def deezer_by_isrc(_isrc):
+        return "https://www.deezer.com/track/reissue"
 
-def test_the_id_based_lookup_uses_the_same_order(monkeypatch) -> None:
-    resolver = _resolver(monkeypatch, resolve={"tidal": "https://t"})
-    links = asyncio.run(resolver._get_songlink_links_by_id_async("abc", "spotify"))
-    assert links == {"tidal": "https://t"}
-    assert cast(Any, resolver).calls == ["resolve"]
+    async def by_id(raw_id, platform):
+        calls.append((raw_id, platform))
+        return {
+            "spotify": "https://open.spotify.com/track/source",
+            "appleMusic": "https://music.apple.com/track/source",
+        }
 
+    async def by_url(_url):
+        return {}
 
-# --- reading the endpoint's answer -----------------------------------------
+    async def empty(*_args):
+        return {}
+
+    monkeypatch.setattr(resolver, "_get_deezer_url_by_isrc_async", deezer_by_isrc)
+    monkeypatch.setattr(resolver, "_get_resolve_links_by_id_async", by_id)
+    monkeypatch.setattr(resolver, "_get_resolve_links_by_url_async", by_url)
+    monkeypatch.setattr(resolver, "_get_songstats_links_async", empty)
+
+    links = asyncio.run(
+        resolver.resolve_all_async("spotify_source_with_isrc", "USUM70504267")
+    )
+
+    assert calls == [("source_with_isrc", "spotify")]
+    assert links["spotify"] == "https://open.spotify.com/track/source"
+    assert links["appleMusic"] == "https://music.apple.com/track/source"
+    assert links["deezer"] == "https://www.deezer.com/track/reissue"
 
 
 def test_both_value_shapes_are_accepted() -> None:
-    """A bare URL string for one platform and an object for the next, in the
-    same response — assuming either shape drops half the links.
-    """
     links = LinkResolver()._process_resolve_response(RESOLVED)
     assert links["spotify"].startswith("https://open.spotify.com/")
     assert links["deezer"].startswith("https://www.deezer.com/")
@@ -106,9 +113,6 @@ def test_a_null_platform_is_skipped_not_recorded_as_empty() -> None:
     ],
 )
 def test_a_failed_or_malformed_answer_yields_no_links(payload) -> None:
-    """Anything unusable has to fall through to the Songlink attempt rather
-    than propagate as an error.
-    """
     assert LinkResolver()._process_resolve_response(payload) == {}
 
 
@@ -124,10 +128,6 @@ def test_a_transport_failure_is_not_an_exception(monkeypatch) -> None:
 
 
 def test_an_isrc_resolves_to_spotify_through_the_resolve_api(monkeypatch) -> None:
-    """Songlink answers 401 to the `isrc` form too, so this used to return ""
-    for every ISRC. Deezer's ISRC index supplies the URL the resolve endpoint
-    understands.
-    """
     resolver = LinkResolver()
     seen: list[dict] = []
 
@@ -139,46 +139,20 @@ def test_an_isrc_resolves_to_spotify_through_the_resolve_api(monkeypatch) -> Non
         seen.append(payload)
         return {"spotify": "https://open.spotify.com/track/0NJu93oln1kkgbHLFzLJ4h"}
 
-    async def unreachable(_isrc):  # pragma: no cover - must not be called
-        raise AssertionError("Songlink must not be asked once resolve answered")
-
     monkeypatch.setattr(resolver, "_get_deezer_url_by_isrc_async", fake_deezer)
     monkeypatch.setattr(resolver, "_resolve_links_async", fake_resolve)
-    monkeypatch.setattr(resolver, "_get_songlink_isrc_links_async", unreachable)
 
     url = asyncio.run(resolver.spotify_url_for_isrc_async("usum70504267"))
     assert url == "https://open.spotify.com/track/0NJu93oln1kkgbHLFzLJ4h"
     assert seen == [{"url": "https://www.deezer.com/track/634430472"}]
 
 
-def test_the_isrc_lookup_still_falls_back_to_songlink(monkeypatch) -> None:
+def test_an_isrc_without_a_deezer_match_stays_empty(monkeypatch) -> None:
     resolver = LinkResolver()
 
     async def no_deezer(_isrc):
         return ""
 
-    async def fake_songlink(isrc):
-        assert isrc == "USUM70504267"
-        return {"spotify": "https://open.spotify.com/track/fallback"}
-
     monkeypatch.setattr(resolver, "_get_deezer_url_by_isrc_async", no_deezer)
-    monkeypatch.setattr(resolver, "_get_songlink_isrc_links_async", fake_songlink)
-
-    url = asyncio.run(resolver.spotify_url_for_isrc_async("USUM70504267"))
-    assert url == "https://open.spotify.com/track/fallback"
-
-
-def test_an_isrc_nothing_recognises_stays_empty(monkeypatch) -> None:
-    resolver = LinkResolver()
-
-    async def nothing(_isrc):
-        return {}
-
-    async def no_deezer(_isrc):
-        return ""
-
-    monkeypatch.setattr(resolver, "_get_deezer_url_by_isrc_async", no_deezer)
-    monkeypatch.setattr(resolver, "_get_songlink_isrc_links_async", nothing)
-
     assert asyncio.run(resolver.spotify_url_for_isrc_async("USUM70504267")) == ""
     assert asyncio.run(resolver.spotify_url_for_isrc_async("  ")) == ""
