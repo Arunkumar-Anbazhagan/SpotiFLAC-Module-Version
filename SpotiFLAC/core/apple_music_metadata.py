@@ -115,6 +115,7 @@ def _artwork_url(artwork: Any, size: int = 3000) -> str:
 
 
 def _unique_values(values: Any) -> list[str]:
+    """Return trimmed, nonempty strings in order, deduplicated ignoring case."""
     result: list[str] = []
     seen: set[str] = set()
     for value in values or []:
@@ -127,6 +128,7 @@ def _unique_values(values: Any) -> list[str]:
 
 
 def _genre_string(*attrs: dict[str, Any]) -> str:
+    """Join unique genres from the first populated source, omitting Music."""
     genres: list[str] = []
     for attr in attrs:
         genres.extend(str(value) for value in (attr.get("genreNames") or []))
@@ -140,6 +142,7 @@ def _genre_string(*attrs: dict[str, Any]) -> str:
 def _first_relationship_item(
     resource: dict[str, Any] | None, name: str
 ) -> dict[str, Any] | None:
+    """Return the first related resource if it is a dictionary, else None."""
     relationship = (resource or {}).get("relationships", {}).get(name, {})
     items = relationship.get("data") or []
     return items[0] if items and isinstance(items[0], dict) else None
@@ -237,6 +240,7 @@ class AppleMusicMetadataClient:
         media_user_token: str | None = None,
         storefront: str | None = None,
     ) -> None:
+        """Configure HTTP access, optional subscriber credentials, and local caches."""
         self._timeout = timeout_s
         # The anonymous developer token opens the catalogue; the lyrics
         # endpoints additionally want a *subscriber*, which is what the
@@ -274,6 +278,7 @@ class AppleMusicMetadataClient:
         self._cache: dict[str, tuple[float, Any]] = {}
 
     def _cache_get(self, key: str) -> Any:
+        """Return a cached value, or None if absent or expired; remove expired entries."""
         entry = self._cache.get(key)
         if entry is None:
             return None
@@ -284,6 +289,7 @@ class AppleMusicMetadataClient:
         return value
 
     def _cache_set(self, key: str, value: Any, ttl_s: float) -> Any:
+        """Cache and return a value, evicting the earliest expiry at capacity."""
         if len(self._cache) >= _CACHE_MAX_ITEMS:
             oldest_key = min(self._cache, key=lambda item: self._cache[item][0])
             self._cache.pop(oldest_key, None)
@@ -292,6 +298,7 @@ class AppleMusicMetadataClient:
 
     @staticmethod
     def _normalize_storefront(storefront: str | None, default: str) -> str:
+        """Normalize a two-letter storefront code, falling back to us if invalid."""
         value = (storefront or default or "us").strip().lower()
         return value if re.fullmatch(r"[a-z]{2}", value) else "us"
 
@@ -558,6 +565,7 @@ class AppleMusicMetadataClient:
 
     @staticmethod
     def _album_id_from_song(song: dict[str, Any]) -> str:
+        """Extract the album ID from relationships, attributes, or the song URL."""
         relation = song.get("relationships", {}).get("albums", {})
         items = relation.get("data") or []
         if items and isinstance(items[0], dict) and items[0].get("id"):
@@ -642,6 +650,7 @@ class AppleMusicMetadataClient:
         semaphore = asyncio.Semaphore(5)
 
         async def load(album_id: str) -> tuple[str, dict[str, Any] | None]:
+            """Hydrate one album while respecting the shared concurrency limit."""
             async with semaphore:
                 return album_id, await self._hydrate_album(
                     album_id, storefront, include_tracks=False
@@ -651,6 +660,10 @@ class AppleMusicMetadataClient:
         return {album_id: album for album_id, album in loaded if album is not None}
 
     async def get_track(self, track_id: str, storefront: str = "us") -> TrackMetadata:
+        """Return cached or fetched track metadata enriched with album details.
+
+        Raise SpotiflacError with TRACK_NOT_FOUND when the song is absent.
+        """
         storefront = self._normalize_storefront(storefront, self._storefront)
         cache_key = f"track:{storefront}:{track_id}"
         cached = self._cache_get(cache_key)
@@ -684,6 +697,10 @@ class AppleMusicMetadataClient:
         album_id: str,
         storefront: str = "us",
     ) -> tuple[dict[str, Any], list[TrackMetadata]]:
+        """Return the album resource and all paginated tracks with disc totals.
+
+        Cache the result and raise TRACK_NOT_FOUND when the album is absent.
+        """
         storefront = self._normalize_storefront(storefront, self._storefront)
         cache_key = f"album:{storefront}:{album_id}"
         cached = self._cache_get(cache_key)
@@ -745,6 +762,10 @@ class AppleMusicMetadataClient:
         playlist_id: str,
         storefront: str = "us",
     ) -> tuple[dict[str, Any], list[TrackMetadata]]:
+        """Return a playlist resource and its songs enriched with album metadata.
+
+        Cache the result and raise TRACK_NOT_FOUND when the playlist is absent.
+        """
         storefront = self._normalize_storefront(storefront, self._storefront)
         cache_key = f"playlist:{storefront}:{playlist_id}"
         cached = self._cache_get(cache_key)
@@ -877,6 +898,7 @@ class AppleMusicMetadataClient:
         url: str,
         include_featuring: bool = True,
     ) -> tuple[str, list[TrackMetadata], str, dict[str, Any]]:
+        """Resolve an Apple URL to its title, tracks, artwork URL, and album info."""
         info = parse_apple_music_url(url)
         t = info["type"]
         storefront = info.get("storefront", "us")
@@ -994,6 +1016,7 @@ class AppleMusicMetadataClient:
         limit: int = 20,
         storefront: str = "",
     ) -> list[Any]:
+        """Return search results for one supported kind, raising ValueError otherwise."""
         key = "tracks" if kind in ("track", "tracks") else f"{kind}s"
         if key not in {"tracks", "albums", "artists", "playlists"}:
             raise ValueError("kind must be track, album, artist or playlist")
@@ -1001,6 +1024,7 @@ class AppleMusicMetadataClient:
 
     @staticmethod
     def _format_search_resource(item: dict[str, Any], kind: str) -> dict[str, Any]:
+        """Convert an Apple search resource to the shared discovery result fields."""
         attr = item.get("attributes") or {}
         artwork = _artwork_url(attr.get("artwork"))
         value: dict[str, Any] = {
@@ -1096,6 +1120,7 @@ class AppleMusicMetadataClient:
         item: dict[str, Any],
         parent_album: dict[str, Any] | None = None,
     ) -> TrackMetadata:
+        """Build track metadata from a song and available album relationships."""
         attr = item.get("attributes") or {}
         album = parent_album or _first_relationship_item(item, "albums") or {}
         album_attr = album.get("attributes") or {}

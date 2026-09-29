@@ -946,6 +946,12 @@ async def _solve_impl(
     cancel_event: threading.Event | None = None,
     browser_info: dict | None = None,
 ) -> str | tuple[str, str | None]:
+    """Run a browser challenge and clean up the browser before returning.
+
+    Return the token, or a token/grant pair when capture_callback is enabled.
+    A captured grant can succeed without a token; an unsolved challenge
+    raises TimeoutError.
+    """
     options: ChromiumOptions | None = None
     browser = None
     profile_dir: str | None = None

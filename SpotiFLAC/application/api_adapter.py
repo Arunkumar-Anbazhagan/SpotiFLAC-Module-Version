@@ -28,6 +28,7 @@ class ApiAdapter:
         self._tasks: set[asyncio.Task] = set()
 
     async def submit_download(self, payload: dict) -> dict:
+        """Enqueue sources with the requested options and return job details."""
         config = SpotiFLACConfig()
         config.download.quality = payload.get("quality", "LOSSLESS")
         services = payload.get("services")

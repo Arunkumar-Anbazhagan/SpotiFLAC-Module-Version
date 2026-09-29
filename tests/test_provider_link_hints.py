@@ -14,6 +14,7 @@ SPOTIFY_URL = "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b"
 
 
 def _provider(name: str) -> JSExtensionProvider:
+    """Build a minimal JavaScript provider without loading an extension runtime."""
     provider = object.__new__(JSExtensionProvider)
     provider._ext = SimpleNamespace(name=name)
     provider.name = f"ext:{name}"
@@ -21,6 +22,7 @@ def _provider(name: str) -> JSExtensionProvider:
 
 
 def _metadata(url: str = SPOTIFY_URL) -> TrackMetadata:
+    """Build Spotify track metadata with a configurable external URL."""
     return TrackMetadata(
         id="0VjIjW4GlUZAMYd2vXMi3b",
         title="Blinding Lights",
@@ -69,7 +71,10 @@ def test_provider_gets_native_id_from_spotify_link(
     expected_key: str,
     expected_value: str,
 ) -> None:
+    """Verify Spotify links produce native provider hints for availability checks."""
+
     async def resolve(self, source_url: str, provider: str) -> str:
+        """Validate the source and provider before returning the native track URL."""
         assert source_url == SPOTIFY_URL
         assert provider == extension.removesuffix("-web")
         return target_url
@@ -89,7 +94,10 @@ def test_provider_gets_native_id_from_spotify_link(
 
 
 def test_foreign_provider_metadata_is_not_fabricated_as_spotify(monkeypatch) -> None:
+    """Verify foreign IDs and URLs do not trigger Spotify-based provider hints."""
+
     async def fail(*args, **kwargs):
+        """Fail if foreign metadata unexpectedly invokes the Spotify link resolver."""
         raise AssertionError("resolver must not be called")
 
     monkeypatch.setattr(

@@ -13,6 +13,7 @@ from SpotiFLAC.core.apple_music_metadata import AppleMusicMetadataClient
 
 
 def _song(song_id: str = "100", disc: int = 1) -> dict:
+    """Build a song resource with rich metadata and album and artist relationships."""
     return {
         "id": song_id,
         "type": "songs",
@@ -54,6 +55,7 @@ def _song(song_id: str = "100", disc: int = 1) -> dict:
 
 
 def _album() -> dict:
+    """Build an album resource with label metadata and tracks on two discs."""
     return {
         "id": "200",
         "type": "albums",
@@ -91,6 +93,7 @@ def _album() -> dict:
 
 
 def test_parse_item_keeps_complete_apple_metadata() -> None:
+    """Verify song conversion preserves album credits, identifiers, and audio traits."""
     client = AppleMusicMetadataClient()
     track = client._parse_item(_song(), _album() | {"_totalDiscs": 2})
 
@@ -111,10 +114,12 @@ def test_parse_item_keeps_complete_apple_metadata() -> None:
 
 
 def test_get_track_hydrates_album_and_caches_result() -> None:
+    """Verify album hydration enriches a song and repeated reads reuse the cache."""
     client = AppleMusicMetadataClient()
     calls: list[str] = []
 
     async def fake_get(path: str, params=None, _media_user_token: str = "") -> dict:
+        """Record requests and serve only the expected song and album fixtures."""
         calls.append(path)
         if "/songs/100" in path:
             return {"data": [_song()]}
@@ -133,15 +138,18 @@ def test_get_track_hydrates_album_and_caches_result() -> None:
 
 
 async def _get_twice(client: AppleMusicMetadataClient):
+    """Fetch the same track twice within one event loop."""
     first = await client.get_track("100")
     second = await client.get_track("100")
     return first, second
 
 
 def test_search_async_returns_typed_tracks_and_album_fields() -> None:
+    """Verify search returns enriched tracks and normalized album results."""
     client = AppleMusicMetadataClient()
 
     async def fake_get(path: str, params=None, _media_user_token: str = "") -> dict:
+        """Serve mixed search results and the album needed for track hydration."""
         if path.endswith("/search"):
             return {
                 "results": {

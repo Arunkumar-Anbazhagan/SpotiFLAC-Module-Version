@@ -7,6 +7,7 @@ from SpotiFLAC.extensions import python_provider
 
 
 def _metadata() -> TrackMetadata:
+    """Build Spotify metadata for testing Python provider ID adaptation."""
     return TrackMetadata(
         id="0JYt03Y1nb8wHWxPBkVncG",
         title="Example",
@@ -18,6 +19,7 @@ def _metadata() -> TrackMetadata:
 
 
 def test_native_ids_are_extracted_from_provider_links() -> None:
+    """Verify numeric track IDs and Amazon ASINs are extracted from provider URLs."""
     assert (
         python_provider._native_track_id("tidal", "https://tidal.com/browse/track/123")
         == "123"
@@ -37,10 +39,13 @@ def test_native_ids_are_extracted_from_provider_links() -> None:
 def test_python_hint_adapts_tidal_id_without_editing_extension(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Verify Tidal ID adaptation preserves the original Spotify external URL."""
+
     class FakeResolver:
         async def resolve_provider_url_async(
             self, source_url: str, provider: str
         ) -> str:
+            """Require a Tidal lookup and return a deterministic native track URL."""
             assert provider == "tidal"
             return "https://tidal.com/browse/track/123"
 

@@ -5,6 +5,7 @@ from SpotiFLAC.core.lyrics import (
 
 
 def _hit(track_id: str, duration: str, has_lyrics: str = "true") -> dict:
+    """Build a JioSaavn result with configurable duration and lyrics availability."""
     return {
         "id": track_id,
         "more_info": {"duration": duration, "has_lyrics": has_lyrics},
@@ -12,10 +13,12 @@ def _hit(track_id: str, duration: str, has_lyrics: str = "true") -> dict:
 
 
 def test_jiosaavn_is_enabled_by_default() -> None:
+    """Verify the default lyrics provider chain includes JioSaavn."""
     assert "jiosaavn" in DEFAULT_LYRICS_PROVIDERS
 
 
 def test_jiosaavn_picks_closest_lyric_match() -> None:
+    """Verify selection favors the closest duration among results with lyrics."""
     found = _best_jiosaavn_result(
         [
             _hit("far", "260"),

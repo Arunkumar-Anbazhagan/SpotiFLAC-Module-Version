@@ -90,6 +90,7 @@ def test_a_js_runtime_logs_under_the_extension_s_name() -> None:
 
 
 def test_the_extension_s_log_line_starts_the_pause() -> None:
+    """Verify Community failure logs persist a pause without pausing the extension."""
     pc.watch_extension_logs()
     logging.getLogger(TIDAL_PY).warning(
         "[tidal] Community failed, falling back to public mirrors: %s", OVERLOADED
@@ -101,6 +102,7 @@ def test_the_extension_s_log_line_starts_the_pause() -> None:
 
 
 def test_community_cooldown_is_visible_through_the_registry_url(monkeypatch) -> None:
+    """Verify an active Community cooldown hides its registered URL."""
     pc.pause_community("tidal", 600)
 
     import SpotiFLAC.core as core
@@ -114,6 +116,7 @@ def test_community_cooldown_is_visible_through_the_registry_url(monkeypatch) -> 
 
 
 def test_community_cooldown_does_not_skip_the_extension() -> None:
+    """Verify Community cooldowns leave both provider extensions eligible."""
     tidal_py, tidal_web = _TidalPy(), _TidalWeb()
     pc.pause_community("tidal", 600)
 
@@ -266,6 +269,8 @@ class _WorkingTidalWeb:
 def test_after_the_503_the_next_track_goes_straight_to_tidal_web(
     tmp_path, monkeypatch
 ) -> None:
+    """Verify repeated Community failures still allow extension attempts and fallback."""
+
     async def no_lookup(isrc):
         return None
 

@@ -224,6 +224,7 @@ class _PauseWatcher(logging.Handler):
         super().__init__(level=logging.WARNING)
 
     def emit(self, record: logging.LogRecord) -> None:
+        """Translate extension pause logs into Community or extension cooldowns."""
         key = extension_key(record.name)
         if not key:
             return

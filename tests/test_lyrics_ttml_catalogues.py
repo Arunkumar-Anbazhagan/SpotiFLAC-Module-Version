@@ -115,6 +115,7 @@ def test_a_link_off_binis_own_host_is_never_taken() -> None:
 
 
 def test_current_lrc_red_storage_link_is_accepted() -> None:
+    """Verify current LRC.red storage URLs pass BiniLyrics link validation."""
     assert L._best_bini_result([_result(lyricsUrl=LRC_RED_URL)], 355, "") is not None
 
 
@@ -149,6 +150,7 @@ def test_bini_gives_plain_lines_when_words_are_not_wanted(monkeypatch) -> None:
 
 
 def test_bini_fetches_ttml_from_current_lrc_red_storage(monkeypatch) -> None:
+    """Verify BiniLyrics fetches LRC.red TTML and converts it to word-timed LRC."""
     client = _use(
         monkeypatch,
         {

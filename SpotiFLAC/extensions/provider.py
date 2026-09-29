@@ -558,6 +558,11 @@ class JSExtensionProvider(BaseProvider):
         is_album: bool = False,
         transcode_to: str | None = None,
     ) -> DownloadResult:
+        """Match and download a track through the JavaScript extension.
+
+        Forward provider hints and prepared context, serialize output writes,
+        and return a success, skip, or failure result after post-processing.
+        """
         availability_options = await self._provider_match_options(metadata)
         avail = await asyncio.to_thread(
             self.check_availability,

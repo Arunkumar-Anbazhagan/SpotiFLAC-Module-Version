@@ -132,6 +132,11 @@ class DownloadService:
         *,
         resume_event: asyncio.Event | None = None,
     ) -> DownloadReport:
+        """Resolve and download sources, reporting successes, failures, and skips.
+
+        Publish progress events and try eligible providers using the request
+        retry policy. Wait on resume_event before proceeding when it is supplied.
+        """
         started_at = datetime.now(timezone.utc)
         succeeded: list[DownloadResult] = []
         failed: list[DownloadFailure] = []

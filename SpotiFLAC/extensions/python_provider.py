@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _spotify_track_url(metadata: TrackMetadata) -> str:
+    """Return a Spotify track URL for a recognized URL or ID, else an empty string."""
     external_url = str(getattr(metadata, "external_url", "") or "").strip()
     match = re.search(
         r"https?://open\.spotify\.com/track/([A-Za-z0-9]{22})(?:[/?#]|$)",
@@ -36,6 +37,7 @@ def _spotify_track_url(metadata: TrackMetadata) -> str:
 
 
 def _native_track_id(provider: str, url: str) -> str:
+    """Extract a supported provider track ID from its URL, else an empty string."""
     value = str(url or "").strip()
     if provider in {"tidal", "qobuz", "deezer"}:
         match = re.search(r"/track/(\d+)(?:[/?#]|$)", value, re.IGNORECASE)
@@ -130,6 +132,11 @@ class PythonExtensionProvider(BaseProvider):
     """Loads a trusted Python provider extension and delegates BaseProvider calls."""
 
     def __new__(cls, ext_id: str, *, ext_dir: str | None = None, **kwargs: Any):
+        """Instantiate an installed provider and wrap downloads with native ID hints.
+
+        Raise ValueError if the extension is missing, or TypeError if it does
+        not expose exactly one BaseProvider subclass.
+        """
         manager = ExtensionManager(ext_dir=ext_dir, auto_install_downloads=False)
         try:
             manager.preload_python_modules()
@@ -173,6 +180,7 @@ class PythonExtensionProvider(BaseProvider):
             output_dir: str,
             **download_kwargs: Any,
         ):
+            """Adapt metadata with a native provider ID before delegating the download."""
             adapted = await _metadata_with_provider_hint(provider, metadata)
             return await original_download(adapted, output_dir, **download_kwargs)
 

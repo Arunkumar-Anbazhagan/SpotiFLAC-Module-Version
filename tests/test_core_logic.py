@@ -47,6 +47,7 @@ def test_normalize_isrc_strips_prefix_and_validates():
 
 
 def test_quality_helpers_normalize_and_fallbacks():
+    """Verify quality normalization, fallback chains, and provider-specific tokens."""
     assert normalize_quality("27") == "HI_RES_LOSSLESS"
     assert normalize_quality("low") == "LOW"
     assert quality_fallback_chain("hi_res_lossless") == [
@@ -317,6 +318,7 @@ def test_ffmpeg_check_handles_both_success_and_missing(monkeypatch, capsys):
 
 
 def test_link_resolver_normalizes_and_extracts_links():
+    """Verify provider detection and link normalization across resolver responses."""
     resolver = link_resolver.LinkResolver()
 
     assert resolver.identify_provider("https://open.spotify.com/track/abc") == "spotify"

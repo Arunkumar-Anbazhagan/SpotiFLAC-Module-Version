@@ -75,6 +75,7 @@ class LegacyDownloadAdapter(ProviderExecutor):
 
     @staticmethod
     def options_for(request: DownloadRequest) -> object:
+        """Translate request configuration into legacy downloader options."""
         from SpotiFLAC.downloader import DownloadOptions
 
         config = request.config

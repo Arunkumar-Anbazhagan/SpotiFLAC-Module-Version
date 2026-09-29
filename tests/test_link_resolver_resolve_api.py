@@ -26,10 +26,12 @@ RESOLVED = {
 
 
 def _resolver(monkeypatch, *, resolve=None) -> LinkResolver:
+    """Create a resolver stub that records payloads and returns configured links."""
     resolver = LinkResolver()
     calls: list[dict] = []
 
     async def fake_resolve(payload):
+        """Record a resolver payload and return the configured response."""
         calls.append(payload)
         return resolve or {}
 
@@ -39,6 +41,7 @@ def _resolver(monkeypatch, *, resolve=None) -> LinkResolver:
 
 
 def test_the_resolve_api_is_used_for_a_source_url(monkeypatch) -> None:
+    """Verify URL resolution forwards the source URL to the resolver API."""
     resolver = _resolver(monkeypatch, resolve={"spotify": "https://spotify"})
     links = asyncio.run(resolver._get_resolve_links_by_url_async("https://source"))
     assert links == {"spotify": "https://spotify"}
@@ -46,6 +49,7 @@ def test_the_resolve_api_is_used_for_a_source_url(monkeypatch) -> None:
 
 
 def test_the_resolve_api_is_used_for_a_platform_id(monkeypatch) -> None:
+    """Verify ID resolution sends the platform, track type, and raw ID."""
     resolver = _resolver(monkeypatch, resolve={"tidal": "https://tidal"})
     links = asyncio.run(resolver._get_resolve_links_by_id_async("abc", "spotify"))
     assert links == {"tidal": "https://tidal"}
@@ -60,9 +64,11 @@ def test_an_isrc_does_not_replace_the_source_id_lookup(monkeypatch) -> None:
     calls: list[tuple[str, str]] = []
 
     async def deezer_by_isrc(_isrc):
+        """Simulate an ISRC lookup matching a different Deezer edition."""
         return "https://www.deezer.com/track/reissue"
 
     async def by_id(raw_id, platform):
+        """Record the source lookup and return links for the original edition."""
         calls.append((raw_id, platform))
         return {
             "spotify": "https://open.spotify.com/track/source",
@@ -70,9 +76,11 @@ def test_an_isrc_does_not_replace_the_source_id_lookup(monkeypatch) -> None:
         }
 
     async def by_url(_url):
+        """Return no extra links for the Deezer reissue URL."""
         return {}
 
     async def empty(*_args):
+        """Return no Songstats fallback links."""
         return {}
 
     monkeypatch.setattr(resolver, "_get_deezer_url_by_isrc_async", deezer_by_isrc)
@@ -91,6 +99,7 @@ def test_an_isrc_does_not_replace_the_source_id_lookup(monkeypatch) -> None:
 
 
 def test_both_value_shapes_are_accepted() -> None:
+    """Verify resolver links accept plain URL strings and URL dictionaries."""
     links = LinkResolver()._process_resolve_response(RESOLVED)
     assert links["spotify"].startswith("https://open.spotify.com/")
     assert links["deezer"].startswith("https://www.deezer.com/")
@@ -113,6 +122,7 @@ def test_a_null_platform_is_skipped_not_recorded_as_empty() -> None:
     ],
 )
 def test_a_failed_or_malformed_answer_yields_no_links(payload) -> None:
+    """Verify unsuccessful or malformed resolver payloads produce no links."""
     assert LinkResolver()._process_resolve_response(payload) == {}
 
 
@@ -128,6 +138,7 @@ def test_a_transport_failure_is_not_an_exception(monkeypatch) -> None:
 
 
 def test_an_isrc_resolves_to_spotify_through_the_resolve_api(monkeypatch) -> None:
+    """Verify normalized ISRC lookup resolves a Deezer match to a Spotify URL."""
     resolver = LinkResolver()
     seen: list[dict] = []
 
@@ -136,6 +147,7 @@ def test_an_isrc_resolves_to_spotify_through_the_resolve_api(monkeypatch) -> Non
         return "https://www.deezer.com/track/634430472"
 
     async def fake_resolve(payload):
+        """Record the Deezer lookup payload and return its Spotify match."""
         seen.append(payload)
         return {"spotify": "https://open.spotify.com/track/0NJu93oln1kkgbHLFzLJ4h"}
 
@@ -148,9 +160,11 @@ def test_an_isrc_resolves_to_spotify_through_the_resolve_api(monkeypatch) -> Non
 
 
 def test_an_isrc_without_a_deezer_match_stays_empty(monkeypatch) -> None:
+    """Verify blank ISRCs and missing Deezer matches return an empty URL."""
     resolver = LinkResolver()
 
     async def no_deezer(_isrc):
+        """Simulate an ISRC with no matching Deezer track."""
         return ""
 
     monkeypatch.setattr(resolver, "_get_deezer_url_by_isrc_async", no_deezer)

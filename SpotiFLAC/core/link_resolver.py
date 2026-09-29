@@ -44,6 +44,7 @@ class LinkResolver:
     MAX_DELAY_S = 10.0
 
     def __init__(self, http_client: AsyncHttpClient | None = None) -> None:
+        """Use the supplied HTTP client or create one, and initialize the Deezer cache."""
         self.http = http_client or AsyncHttpClient(
             "link-resolver",
             rate_limiter=async_zarz_rate_limiter,
@@ -327,6 +328,7 @@ class LinkResolver:
         return ""
 
     async def _get_resolve_links_by_url_async(self, url: str) -> dict[str, str]:
+        """Resolve a source URL into normalized platform links."""
         return await self._resolve_links_async({"url": url})
 
     async def resolve_provider_url_async(
@@ -353,6 +355,7 @@ class LinkResolver:
         raw_id: str,
         platform: str,
     ) -> dict[str, str]:
+        """Resolve a platform track identifier into normalized platform links."""
         return await self._resolve_links_async(
             {"platform": platform, "type": "track", "id": raw_id},
         )
@@ -397,6 +400,11 @@ class LinkResolver:
         track_id: str,
         isrc: str | None = None,
     ) -> dict[str, str]:
+        """Return cached or resolved platform links and any discovered ISRC.
+
+        Combine source-ID links with Deezer and Songstats ISRC lookups,
+        using fallback links to fill missing platforms.
+        """
         cache_key = f"{track_id}|{isrc or ''}"
         cached = get_cached_response("link-resolver", cache_key, 7 * 24 * 60 * 60)
         if isinstance(cached, dict):

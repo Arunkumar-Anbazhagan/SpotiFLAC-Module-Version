@@ -1267,6 +1267,7 @@ def _record_download_timeout(key: str) -> int:
 
 
 def _clear_download_timeout(key: str) -> None:
+    """Remove the timeout streak for a request key while holding its lock."""
     with _DOWNLOAD_TIMEOUT_STREAKS_LOCK:
         _DOWNLOAD_TIMEOUT_STREAKS.pop(key, None)
 

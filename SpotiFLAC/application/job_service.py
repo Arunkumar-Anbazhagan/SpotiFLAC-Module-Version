@@ -112,6 +112,7 @@ class JobService:
         return report
 
     async def _persist_item_results(self, job_id: str, report: Any) -> None:
+        """Persist reported item outcomes and publish update and terminal events."""
         outcomes: dict[str, dict[str, Any]] = {}
         for result in getattr(report, "succeeded", []):
             if result.source:

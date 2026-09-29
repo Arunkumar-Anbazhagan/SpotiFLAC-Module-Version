@@ -886,9 +886,11 @@ def test_skipped_provider_results_preserve_source_and_report_skip():
 
 
 def test_failed_provider_results_are_not_reported_as_success_and_fall_back():
+    """Verify a failed result triggers fallback and only the successful result is kept."""
     attempts = []
 
     async def execute(provider, source):
+        """Record provider attempts, failing the first and succeeding on fallback."""
         attempts.append(provider)
         if provider == "first":
             return DownloadResult.fail(provider, "first provider unavailable")
@@ -1134,6 +1136,7 @@ def test_metadata_service_resolves_sources_to_track_metadata():
 
 
 def test_provider_resolver_prefers_supported_quality_and_fallback_order():
+    """Verify default candidates favor Tidal and include supported fallbacks."""
     resolver = ProviderResolver()
     request = DownloadRequest(
         sources=["spotify:track:abc123"],
@@ -1156,6 +1159,7 @@ def test_provider_resolver_preserves_configured_legacy_services():
 
 
 def test_download_pipeline_prepares_source_and_provider_context():
+    """Verify preparation records the selected provider and ordered candidates."""
     request = DownloadRequest(
         sources=["spotify:track:abc123"], config=SpotiFLACConfig()
     )
@@ -1290,9 +1294,11 @@ def test_tag_step_delegates_to_the_tagging_boundary():
 
 
 def test_host_injects_metadata_for_audio_only_provider(tmp_path, monkeypatch):
+    """Verify the host tags audio when the provider does not inject metadata."""
     calls = []
 
     async def fake_embed(path, metadata, options):
+        """Record the path, title, and tagging options passed to the host tagger."""
         calls.append((path, metadata.title, options.embed_lyrics, options.enrich))
 
     monkeypatch.setattr("SpotiFLAC.core.tagger.embed_metadata_async", fake_embed)
@@ -1929,8 +1935,11 @@ def test_job_service_updates_item_results_by_source(tmp_path):
 
 
 def test_job_service_marks_skipped_items_terminal(tmp_path):
+    """Verify a skipped download produces a terminal item in a completed job."""
+
     class FakeDownloadService:
         async def download(self, request):
+            """Return a report marking the first source as already downloaded."""
             return DownloadReport(
                 succeeded=[],
                 failed=[],
